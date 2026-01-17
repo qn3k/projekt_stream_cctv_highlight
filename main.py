@@ -4,7 +4,7 @@ from ultralytics import YOLO
 import argparse
 
 class VideoMomentSearcher:
-    def __init__(self, video_path, clip_len_sec=2, fps_sample=2):
+    def __init__(self, video_path, clip_len_sec=3, fps_sample=2):
         self.video_path = video_path
         self.clip_len_sec = clip_len_sec
         self.fps_sample = fps_sample
@@ -59,7 +59,7 @@ class VideoMomentSearcher:
         if motion > 15:
             score += 1
 
-        important = {"person", "car", "truck", "bicycle"}
+        important = {"person", "car", "truck", "bicycle", "vase"}
         score += len(set(objects) & important)
 
         return score

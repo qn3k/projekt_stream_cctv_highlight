@@ -1,0 +1,9 @@
+import numpy as np
+
+labels = [
+    0, 1, 0, 0, 1,
+    0, 0, 0, 0, 0
+]
+
+labels = np.array(labels, dtype=np.int64)  
+np.save("labels.npy", labels)
