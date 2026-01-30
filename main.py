@@ -7,7 +7,7 @@ import os
 import subprocess
 import whisper
 
-self.asr = whisper.load_model("base") 
+
 
 class VideoMomentSearcher:
     def __init__(self, video_path, clip_len_sec=3, fps_sample=2):
@@ -16,6 +16,7 @@ class VideoMomentSearcher:
         self.fps_sample = fps_sample
         self.model = YOLO("yolov8n.pt")
         self.index = []
+        self.asr = whisper.load_model("base") 
 
     def audio_score(self, start, duration):
         try:
