@@ -7,8 +7,6 @@ import os
 import subprocess
 import whisper
 
-
-
 class VideoMomentSearcher:
     def __init__(self, video_path, clip_len_sec=30, fps_sample=2):
         self.video_path = video_path
@@ -153,7 +151,7 @@ class VideoMomentSearcher:
                 f"score={r['score']} objects={r['objects']}"
             )
 
-    def save_top_clips(self, percentile=80, out_dir="highlights"):
+    def save_top_clips(self, percentile=90, out_dir="highlights"):
         os.makedirs(out_dir, exist_ok=True)
 
         threshold = self.adaptive_threshold(percentile)
@@ -182,7 +180,7 @@ class VideoMomentSearcher:
         if self.asr is None:
             self.asr = whisper.load_model("base")
         result = self.asr.transcribe(clip_path, fp16=False)
-        return result["text"].strip()
+        return result["segments"]
 
     def save_subtitles_txt(self, text, out_path):
         with open(out_path, "w", encoding="utf-8") as f:
