@@ -10,13 +10,13 @@ import whisper
 
 
 class VideoMomentSearcher:
-    def __init__(self, video_path, clip_len_sec=3, fps_sample=2):
+    def __init__(self, video_path, clip_len_sec=30, fps_sample=2):
         self.video_path = video_path
         self.clip_len_sec = clip_len_sec
         self.fps_sample = fps_sample
         self.model = YOLO("yolov8n.pt")
         self.index = []
-        self.asr = whisper.load_model("base") 
+        self.asr = None
 
     def audio_score(self, start, duration):
         try:
@@ -32,8 +32,11 @@ class VideoMomentSearcher:
             return 0.0
 
     def adaptive_threshold(self, percentile=90):
+        if not self.index:
+            return 0.0
         scores = [c["score"] for c in self.index]
         return np.percentile(scores, percentile)
+
 
     def iter_clips(self):
         cap = cv2.VideoCapture(self.video_path)
@@ -61,14 +64,13 @@ class VideoMomentSearcher:
         cap.release()
 
     def detect_objects(self, frames):
+        objs = []
         results = self.model(frames, verbose=False)
-        objs = set()
 
         for r in results:
             for c in r.boxes.cls:
-                objs.add(self.model.names[int(c)])
-
-        return list(objs)
+                objs.append(self.model.names[int(c)])
+        return objs
 
     def motion_score(self, frames):
         diffs = []
@@ -88,7 +90,7 @@ class VideoMomentSearcher:
             score += 2
 
         # dźwięk
-        if audio > 0.6:
+        if audio > 0.1:
             score += 3
 
         #important = {"person", "fire", "gun", "smoke"}
@@ -107,8 +109,10 @@ class VideoMomentSearcher:
             objects = self.detect_objects(frames)
             motion = self.motion_score(frames)
             audio = self.audio_score(start, duration)
+            #audio_thr = np.percentile([c["audio"] for c in self.index], 90)
 
             score = self.interesting_score(objects, motion, audio)
+            #score = self.interesting_score(objects, motion)
 
             self.index.append({
                 "start": start,
@@ -149,7 +153,7 @@ class VideoMomentSearcher:
                 f"score={r['score']} objects={r['objects']}"
             )
 
-    def save_top_clips(self, percentile=90, out_dir="highlights"):
+    def save_top_clips(self, percentile=80, out_dir="highlights"):
         os.makedirs(out_dir, exist_ok=True)
 
         threshold = self.adaptive_threshold(percentile)
@@ -163,7 +167,7 @@ class VideoMomentSearcher:
     #zapisywanie do mp4
     def save_clip(self, start, duration, out_path):
         cmd = [
-            "ffmpeg",
+            "./ffmpeg",
             "-y",
             "-ss", str(start),
             "-i", self.video_path,
@@ -175,6 +179,8 @@ class VideoMomentSearcher:
 
     #napisy
     def transcribe_clip(self, clip_path):
+        if self.asr is None:
+            self.asr = whisper.load_model("base")
         result = self.asr.transcribe(clip_path, fp16=False)
         return result["text"].strip()
 
@@ -209,7 +215,8 @@ class VideoMomentSearcher:
             self.save_clip(clip["start"], self.clip_len_sec, video_out)
 
             text = self.transcribe_clip(video_out)
-            self.save_subtitles_txt(text, subs_out)
+            self.save_subtitles_srt(text, subs_out)
+            #self.save_subtitles_txt(text, subs_out)
 
             print(f"[SAVED] {video_out} + napisy")
 
@@ -218,11 +225,19 @@ class VideoMomentSearcher:
 def main():
     parser = argparse.ArgumentParser(description="Wyszukiwarka momentów w wideo (MVP)")
     parser.add_argument("video", help="ścieżka do pliku wideo")
-    parser.add_argument("--query", help="zapytanie (np. 'car person')", required=True)
+    parser.add_argument("--query", help="zapytanie (np. 'car person')",default="person")
+    parser.add_argument("--save", action="store_true", help="zapisz highlighty")
+    parser.add_argument("--subs", action="store_true", help="zapisz highlighty z napisami")
+
     args = parser.parse_args()
 
     engine = VideoMomentSearcher(args.video)
     engine.build_index()
+
+    if args.subs:
+        engine.save_top_clips_with_subs()
+    elif args.save:
+        engine.save_top_clips()
 
     results = engine.search(args.query)
     engine.show_results(results)
